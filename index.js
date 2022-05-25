@@ -9,7 +9,9 @@ const cryptocom = require("./feeds/crypto.com");
 const ftx = require("./feeds/ftx");
 const kucoin = require("./feeds/kucoin");
 const gate = require("./feeds/gate");
+const refExchange = require("./feeds/refExchange");
 const { GetMedianPrice, LoadJson, SaveJson } = require("./functions");
+const Big = require("big.js");
 
 console.log("Welcome to the Oracle Bot");
 
@@ -76,6 +78,7 @@ const TestnetCoins = {
     huobi: "aurorausdt",
     kucoin: "AURORA-USDT",
     gate: "aurora_usdt",
+    relativeDiff: 0.01, // 1%
   },
 };
 
@@ -133,7 +136,6 @@ const MainnetCoins = {
     kucoin: "BTC-USDT",
     gate: "btc_usdt",
   },
-  /*
   "aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near": {
     decimals: 18,
     coingecko: "aurora-near",
@@ -141,15 +143,41 @@ const MainnetCoins = {
     huobi: "aurorausdt",
     kucoin: "AURORA-USDT",
     gate: "aurora_usdt",
-  }
-   */
+    relativeDiff: 0.01, // 1%
+  },
+};
+
+const computeUsn = (usnTokenId, usdtTokenId, stablePoolId) => {
+  return {
+    dependencyCoin: usdtTokenId,
+    computeCall: async (dependencyPrice) => {
+      if (!dependencyPrice) {
+        return null;
+      }
+      try {
+        const usnPriceMultiplier = await refExchange.computeUsnPriceMultiplier(
+          near,
+          usnTokenId,
+          usdtTokenId,
+          stablePoolId
+        );
+        return usnPriceMultiplier
+          ? {
+              multiplier: Math.round(
+                dependencyPrice.multiplier * usnPriceMultiplier
+              ),
+              decimals: dependencyPrice.decimals + 12,
+            }
+          : null;
+      } catch (e) {
+        console.log(e);
+        return null;
+      }
+    },
+  };
 };
 
 const MainnetComputeCoins = {
-  "c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.factory.bridge.near": {
-    dependencyCoin: "aurora",
-    computeCall: async (dependencyPrice) => dependencyPrice,
-  },
   "meta-pool.near": {
     dependencyCoin: "wrap.near",
     computeCall: async (dependencyPrice) => {
@@ -179,34 +207,27 @@ const MainnetComputeCoins = {
       }
     },
   },
-  usn: {
-    dependencyCoin:
-      "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near",
+  "linear-protocol.near": {
+    dependencyCoin: "wrap.near",
     computeCall: async (dependencyPrice) => {
       if (!dependencyPrice) {
         return null;
       }
       try {
-        const rawStablePool = await near.NearView(
-          "v2.ref-finance.near",
-          "get_stable_pool",
-          { pool_id: 3020 }
+        const rawLiNearPrice = await near.NearView(
+          "linear-protocol.near",
+          "ft_price",
+          {}
         );
-        const relDiff =
-          parseFloat(rawStablePool.c_amounts[0]) /
-          parseFloat(rawStablePool.c_amounts[1]);
-        if (
-          relDiff < 0.99 ||
-          relDiff > 1.01 ||
-          parseFloat(rawStablePool.c_amounts[0]) <
-            config.MIN_USN_LIQUIDITY_IN_POOL
-        ) {
-          console.error("USN stable pool is unbalanced");
+        const liNearMultiplier = parseFloat(rawLiNearPrice) / 1e24;
+        // TODO: Update 1.25 in about 1 year (May, 2023)
+        if (liNearMultiplier < 1.0 || liNearMultiplier > 1.15) {
+          console.error("liNearMultiplier is out of range:", liNearMultiplier);
           return null;
         }
         return {
-          multiplier: dependencyPrice.multiplier,
-          decimals: dependencyPrice.decimals + 12,
+          multiplier: Math.round(dependencyPrice.multiplier * liNearMultiplier),
+          decimals: dependencyPrice.decimals,
         };
       } catch (e) {
         console.log(e);
@@ -214,6 +235,11 @@ const MainnetComputeCoins = {
       }
     },
   },
+  usn: computeUsn(
+    "usn",
+    "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near",
+    3020
+  ),
 };
 
 const TestnetComputeCoins = {
@@ -221,39 +247,7 @@ const TestnetComputeCoins = {
     dependencyCoin: "aurora",
     computeCall: async (dependencyPrice) => dependencyPrice,
   },
-  "usdn.testnet": {
-    dependencyCoin: "usdt.fakes.testnet",
-    computeCall: async (dependencyPrice) => {
-      if (!dependencyPrice) {
-        return null;
-      }
-      try {
-        const rawStablePool = await near.NearView(
-          "ref-finance-101.testnet",
-          "get_stable_pool",
-          { pool_id: 356 }
-        );
-        const relDiff =
-          parseFloat(rawStablePool.c_amounts[0]) /
-          parseFloat(rawStablePool.c_amounts[1]);
-        if (
-          relDiff < 0.99 ||
-          relDiff > 1.01 ||
-          parseFloat(rawStablePool.c_amounts[0]) < 900000 * 1e18
-        ) {
-          console.error("USN stable pool is unbalanced");
-          return null;
-        }
-        return {
-          multiplier: dependencyPrice.multiplier,
-          decimals: dependencyPrice.decimals + 12,
-        };
-      } catch (e) {
-        console.log(e);
-        return null;
-      }
-    },
-  },
+  "usdn.testnet": computeUsn("usdn.testnet", "usdt.fakes.testnet", 356),
 };
 
 const mainnet = nearConfig.networkId === "mainnet";
@@ -312,7 +306,16 @@ async function main() {
     )
   );
 
+  // console.log(JSON.stringify(new_prices, null, 2));
+
   const tickers = Object.keys(coins).concat(Object.keys(computeCoins));
+  const relativeDiffs = tickers.reduce((agg, ticker) => {
+    agg[ticker] =
+      coins[ticker]?.relativeDiff ||
+      computeCoins[ticker]?.relativeDiff ||
+      config.RELATIVE_DIFF;
+    return agg;
+  }, {});
 
   const raw_oracle_price_data = await near.NearView(
     config.CONTRACT_ID,
@@ -334,7 +337,7 @@ async function main() {
     {}
   );
 
-  await bot.updatePrices(tickers, old_prices, new_prices, state);
+  await bot.updatePrices(relativeDiffs, old_prices, new_prices, state);
 
   SaveJson(state, config.STATE_FILENAME);
 }
