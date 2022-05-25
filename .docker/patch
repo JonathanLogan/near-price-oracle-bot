@@ -1,6 +1,6 @@
-diff -Naur near-price-oracle-bot2/near.js near-price-oracle-bot/near.js
---- near-price-oracle-bot2/near.js	2022-05-25 13:04:48.892322080 +0400
-+++ near-price-oracle-bot/near.js	2022-05-25 13:01:39.385986536 +0400
+diff -Naur near-price-oracle-bot2/near.js near-price-oracle-bot1/near.js
+--- near-price-oracle-bot2/near.js	2022-05-25 13:47:42.504705854 +0400
++++ near-price-oracle-bot1/near.js	2022-05-25 13:38:44.831470255 +0400
 @@ -63,8 +63,9 @@
  };
  
@@ -13,10 +13,12 @@ diff -Naur near-price-oracle-bot2/near.js near-price-oracle-bot/near.js
    try {
      const credentials = JSON.parse(fs.readFileSync(keyPath));
      return credentials.private_key;
-diff -Naur near-price-oracle-bot2/run.sh near-price-oracle-bot/run.sh
---- near-price-oracle-bot2/run.sh	2022-05-25 13:04:48.892322080 +0400
-+++ near-price-oracle-bot/run.sh	2022-05-25 13:03:59.140787358 +0400
-@@ -2,19 +2,18 @@
+diff -Naur near-price-oracle-bot2/run.sh near-price-oracle-bot1/run.sh
+--- near-price-oracle-bot2/run.sh	2022-05-25 13:47:42.504705854 +0400
++++ near-price-oracle-bot1/run.sh	2022-05-25 13:42:02.288648935 +0400
+@@ -1,20 +1,18 @@
+-#!/bin/bash
++#!/bin/sh
  set -e
  
  export NODE_ENV=mainnet
@@ -34,10 +36,10 @@ diff -Naur near-price-oracle-bot2/run.sh near-price-oracle-bot/run.sh
  while :
  do
    DATE=$(date "+%Y_%m_%d")
-   date | tee -a logs/logs_$DATE.txt
+-  date | tee -a logs/logs_$DATE.txt
 -  # TODO: Update your path to the node binary if necessary
 -  /usr/local/bin/node index.js 2>&1 | tee -a logs/logs_$DATE.txt
 +  date | tee -a "/home/node/logs/logs_${DATE}.txt"
-+  /usr/local/bin/node index.js 2>&1 | tee -a "/home/node/logs/logs_${DATE}.txt"  
++  /usr/local/bin/node index.js 2>&1 | tee -a "/home/node/logs/logs_${DATE}.txt"
    sleep 1
  done
