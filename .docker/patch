@@ -25,7 +25,7 @@ diff -Naur near-price-oracle-bot2/run.sh near-price-oracle-bot1/run.sh
 -# TODO: Add your account ID
 -# export NEAR_ACCOUNT_ID=abc.near
 +export NEAR_ACCOUNT_ID=$(cat /home/node/key.json | jq .account_id | tr -d \")
- export CONTRACT_ID=priceoracle.near
+ export CONTRACT_NAME=priceoracle.near
  export PRINT_DEBUG=true
  
 -cd $(dirname "$0")
@@ -41,5 +41,5 @@ diff -Naur near-price-oracle-bot2/run.sh near-price-oracle-bot1/run.sh
 -  /usr/local/bin/node index.js 2>&1 | tee -a logs/logs_$DATE.txt
 +  date | tee -a "/home/node/logs/logs_${DATE}.txt"
 +  /usr/local/bin/node index.js 2>&1 | tee -a "/home/node/logs/logs_${DATE}.txt"
-   sleep 1
+   sleep 5
  done
