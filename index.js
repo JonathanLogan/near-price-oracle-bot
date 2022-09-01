@@ -11,8 +11,6 @@ const kucoin = require("./feeds/kucoin");
 const gate = require("./feeds/gate");
 const refExchange = require("./feeds/refExchange");
 const { GetMedianPrice, LoadJson, SaveJson } = require("./functions");
-const Big = require("big.js");
-
 console.log("Welcome to the Oracle Bot");
 
 const nearConfig = config.getConfig(process.env.NODE_ENV || "development");
@@ -37,6 +35,7 @@ const TestnetCoins = {
     cryptocom: "ETH_USDT",
     kucoin: "ETH-USDT",
     gate: "eth_usdt",
+    fractionDigits: 2
   },
   "usdt.fakes.testnet": {
     decimals: 6,
@@ -70,6 +69,7 @@ const TestnetCoins = {
     cryptocom: "BTC_USDT",
     kucoin: "BTC-USDT",
     gate: "btc_usdt",
+    fractionDigits: 2
   },
   "aurora.fakes.testnet": {
     decimals: 18,
@@ -79,7 +79,19 @@ const TestnetCoins = {
     kucoin: "AURORA-USDT",
     gate: "aurora_usdt",
     relativeDiff: 0.01, // 1%
+    fractionDigits: 5
   },
+  "woo.orderly.testnet": {
+    decimals: 18,
+    coingecko: "woo-network",
+    binance: "WOOUSDT",
+    huobi: "woousdt",
+    cryptocom: "WOO_USDT",
+    kucoin: "WOO-USDT",
+    gate: "woo_usdt",
+    relativeDiff: 0.01, // 1%
+    fractionDigits: 6
+  }
 };
 
 const MainnetCoins = {
@@ -102,6 +114,7 @@ const MainnetCoins = {
     cryptocom: "ETH_USDT",
     kucoin: "ETH-USDT",
     gate: "eth_usdt",
+    fractionDigits: 2
   },
   "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near": {
     decimals: 6,
@@ -135,6 +148,7 @@ const MainnetCoins = {
     cryptocom: "BTC_USDT",
     kucoin: "BTC-USDT",
     gate: "btc_usdt",
+    fractionDigits: 2
   },
   "aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near": {
     decimals: 18,
@@ -144,7 +158,19 @@ const MainnetCoins = {
     kucoin: "AURORA-USDT",
     gate: "aurora_usdt",
     relativeDiff: 0.01, // 1%
+    fractionDigits: 5
   },
+  "4691937a7508860f876c9c0a2a617e7d9e945d4b.factory.bridge.near": {
+    decimals: 18,
+    coingecko: "woo-network",
+    binance: "WOOUSDT",
+    huobi: "woousdt",
+    cryptocom: "WOO_USDT",
+    kucoin: "WOO-USDT",
+    gate: "woo_usdt",
+    relativeDiff: 0.01, // 1%
+    fractionDigits: 6
+  }
 };
 
 const computeUsn = (usnTokenId, usdtTokenId, stablePoolId) => {
@@ -277,7 +303,9 @@ async function main() {
 
   const new_prices = Object.keys(coins).reduce((object, ticker) => {
     let price = GetMedianPrice(values, ticker);
-    const discrepancy_denominator = Math.pow(10, config.FRACTION_DIGITS);
+    coins[ticker].fractionDigits = coins[ticker].fractionDigits || config.FRACTION_DIGITS;
+
+    const discrepancy_denominator = Math.pow(10, coins[ticker].fractionDigits);
 
     // Since stable coins rely only on coingecko price, to prevent further risks, we limit the range.
     if (coins[ticker].stablecoin && price > 0) {
@@ -291,7 +319,7 @@ async function main() {
 
     object[ticker] = {
       multiplier: Math.round(price * discrepancy_denominator),
-      decimals: coins[ticker].decimals + config.FRACTION_DIGITS,
+      decimals: coins[ticker].decimals + coins[ticker].fractionDigits,
     };
     return object;
   }, {});
